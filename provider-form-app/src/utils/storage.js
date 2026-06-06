@@ -60,3 +60,29 @@ export function clearSavedAnswers(formId) {
 export function generateId() {
   return 'form_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 }
+
+const PHOTO_KEY_PREFIX = 'cchp_photos_';
+
+export function getPhotoData(formId) {
+  try {
+    return JSON.parse(localStorage.getItem(PHOTO_KEY_PREFIX + formId) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+export function savePhotoData(formId, photos) {
+  try {
+    localStorage.setItem(PHOTO_KEY_PREFIX + formId, JSON.stringify(photos));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function clearPhotoData(formId) {
+  try {
+    localStorage.removeItem(PHOTO_KEY_PREFIX + formId);
+  } catch {
+    // ignore
+  }
+}

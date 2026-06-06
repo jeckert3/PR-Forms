@@ -13,23 +13,6 @@ const LGRAY = [245, 245, 245];
 const MGRAY = [180, 180, 180];
 const DGRAY = [80, 80, 80];
 
-function drawHeader(doc, title, subtitle) {
-  doc.setFillColor(...BLUE);
-  doc.rect(0, 0, PW, 60, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text("Cook Children's Health Plan", PW / 2, 22, { align: 'center' });
-  doc.setFontSize(12);
-  doc.text(title, PW / 2, 40, { align: 'center' });
-  if (subtitle) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(subtitle, PW / 2, 53, { align: 'center' });
-  }
-  doc.setTextColor(0, 0, 0);
-}
-
 function drawSectionHeader(doc, text, y) {
   doc.setFillColor(...BLUE);
   doc.rect(MARGIN, y, CW, 14, 'F');
@@ -83,13 +66,62 @@ function checkPageBreak(doc, y, needed = 30) {
   return y;
 }
 
+function appendNotesAndPhotos(doc, notes, photos) {
+  if (!notes && (!photos || photos.length === 0)) return;
+  doc.addPage();
+  let y = 40;
+  if (notes) {
+    y = drawSectionHeader(doc, 'Additional Notes', y);
+    const lines = doc.splitTextToSize(notes, CW - 8);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    doc.text(lines, MARGIN + 4, y);
+    y += lines.length * 12 + 14;
+  }
+  if (photos && photos.length > 0) {
+    y = checkPageBreak(doc, y, 50);
+    y = drawSectionHeader(doc, 'Photos', y);
+    const imgW = (CW - 10) / 2;
+    let col = 0;
+    let rowMaxH = 0;
+    for (const photo of photos) {
+      const ar = (photo && photo.aspectRatio) ? photo.aspectRatio : (4 / 3);
+      const imgH = Math.round(imgW / ar);
+      rowMaxH = Math.max(rowMaxH, imgH);
+      y = checkPageBreak(doc, y, imgH + 12);
+      const x = MARGIN + col * (imgW + 10);
+      try {
+        doc.addImage(photo.dataUrl, 'JPEG', x, y, imgW, imgH);
+      } catch {
+        // skip unembeddable image
+      }
+      col++;
+      if (col >= 2) {
+        col = 0;
+        y += rowMaxH + 8;
+        rowMaxH = 0;
+      }
+    }
+    if (col > 0) y += rowMaxH + 8;
+  }
+}
+
 // ─── PROVIDER VISIT 2026 ───────────────────────────────────────────────────
 
-export function generateProviderVisitPDF(answers) {
+export function generateProviderVisitPDF(answers, photos = []) {
   const doc = new jsPDF('p', 'pt', 'letter');
-  drawHeader(doc, 'PROVIDER VISIT 2026', '801 Seventh Avenue Box 2488  |  Fort Worth, Texas 76113-2488  |  888-243-3312');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text('PROVIDER VISIT 2026', PW / 2, 30, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...DGRAY);
+  doc.text('801 Seventh Avenue Box 2488  |  Fort Worth, Texas 76113-2488  |  888-243-3312', PW / 2, 42, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
 
-  let y = 75;
+  let y = 55;
 
   // Visit Types row
   const visitTypes = ['Orientation', 'Education/Servicing', 'APM/PIP Reports', 'Problem Resolution'];
@@ -324,6 +356,8 @@ export function generateProviderVisitPDF(answers) {
   doc.setTextColor(...DGRAY);
   doc.text('Office Representative Signature', MARGIN, y + 9);
 
+  appendNotesAndPhotos(doc, answers._extra_notes || '', photos);
+
   // Footer
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
@@ -353,11 +387,15 @@ function calcScore(section, answers) {
   return { earned, possible };
 }
 
-export function generateSiteEvalPDF(answers) {
+export function generateSiteEvalPDF(answers, photos = []) {
   const doc = new jsPDF('p', 'pt', 'letter');
-  drawHeader(doc, 'SITE EVALUATION TOOL', 'Cook Children\'s Health Plan');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text('SITE EVALUATION TOOL', PW / 2, 30, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
 
-  let y = 72;
+  let y = 48;
 
   // Provider info block
   doc.setFontSize(9);
@@ -524,6 +562,8 @@ export function generateSiteEvalPDF(answers) {
 
   drawField(doc, 'Date', answers.committee_date, MARGIN, y, 32, 120);
 
+  appendNotesAndPhotos(doc, answers._extra_notes || '', photos);
+
   // Footer
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
@@ -539,11 +579,21 @@ export function generateSiteEvalPDF(answers) {
 
 // ─── CUSTOM FORM PDF ──────────────────────────────────────────────────────
 
-export function generateCustomFormPDF(form, answers) {
+export function generateCustomFormPDF(form, answers, photos = []) {
   const doc = new jsPDF('p', 'pt', 'letter');
-  drawHeader(doc, form.name.toUpperCase(), form.description || '');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text(form.name.toUpperCase(), PW / 2, 30, { align: 'center' });
+  if (form.description) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...DGRAY);
+    doc.text(form.description, PW / 2, 42, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+  }
 
-  let y = 80;
+  let y = 55;
 
   for (const section of (form.sections || [])) {
     y = checkPageBreak(doc, y, 30);
@@ -575,6 +625,8 @@ export function generateCustomFormPDF(form, answers) {
     y += 4;
   }
 
+  appendNotesAndPhotos(doc, answers._extra_notes || '', photos);
+
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
@@ -588,14 +640,14 @@ export function generateCustomFormPDF(form, answers) {
 
 // ─── DISPATCHER ──────────────────────────────────────────────────────────
 
-export function generatePDF(form, answers) {
+export function generatePDF(form, answers, photos = []) {
   let doc;
   if (form.id === 'provider-visit-2026') {
-    doc = generateProviderVisitPDF(answers);
+    doc = generateProviderVisitPDF(answers, photos);
   } else if (form.id === 'site-evaluation-tool') {
-    doc = generateSiteEvalPDF(answers);
+    doc = generateSiteEvalPDF(answers, photos);
   } else {
-    doc = generateCustomFormPDF(form, answers);
+    doc = generateCustomFormPDF(form, answers, photos);
   }
   const safeName = form.name.replace(/[^a-z0-9]/gi, '_');
   doc.save(`${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);

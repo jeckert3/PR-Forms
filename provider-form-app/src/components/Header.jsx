@@ -24,9 +24,6 @@ export default function Header({ title, showBack = false, onBack }) {
         )}
 
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium text-blue-200 leading-tight">
-            Cook Children's Health Plan
-          </div>
           <div className="font-bold text-base leading-tight truncate">
             {title || 'Provider Forms'}
           </div>

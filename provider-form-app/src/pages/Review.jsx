@@ -1,13 +1,37 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Download, Edit2, CheckCircle, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, Edit2, CheckCircle, RotateCcw, ChevronDown, ChevronUp, Camera, X } from 'lucide-react';
 import Header from '../components/Header';
 import { BUILT_IN_FORMS } from '../forms/index';
-import { getCustomForms, getSavedAnswers, clearSavedAnswers } from '../utils/storage';
+import { getCustomForms, getSavedAnswers, clearSavedAnswers, saveDraftAnswers, getPhotoData, savePhotoData, clearPhotoData } from '../utils/storage';
 import { generatePDF } from '../utils/pdfGenerator';
 
 function getAllForms() {
   return [...BUILT_IN_FORMS, ...getCustomForms()];
+}
+
+async function compressImage(file, maxWidth = 1200, quality = 0.8) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', quality), aspectRatio: width / height });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function isConditionMet(question, answers) {
@@ -115,6 +139,8 @@ export default function Review() {
   const navigate = useNavigate();
   const [generating, setGenerating] = useState(false);
   const [done, setDone] = useState(false);
+  const [extraNotes, setExtraNotes] = useState(() => getSavedAnswers(formId)._extra_notes || '');
+  const [photos, setPhotos] = useState(() => getPhotoData(formId));
 
   const form = getAllForms().find((f) => f.id === formId);
   const answers = getSavedAnswers(formId);
@@ -139,7 +165,7 @@ export default function Review() {
     setGenerating(true);
     try {
       await new Promise((r) => setTimeout(r, 50));
-      generatePDF(form, answers);
+      generatePDF(form, getSavedAnswers(formId), photos);
       setDone(true);
     } finally {
       setGenerating(false);
@@ -148,6 +174,7 @@ export default function Review() {
 
   const handleStartNew = () => {
     clearSavedAnswers(formId);
+    clearPhotoData(formId);
     navigate(`/form/${formId}`);
   };
 
@@ -196,6 +223,76 @@ export default function Review() {
             onEdit={handleEdit}
           />
         ))}
+
+        {/* Additional Notes */}
+        <div className="card">
+          <h3 className="font-bold text-gray-900 mb-2">Additional Notes</h3>
+          <p className="text-xs text-gray-400 mb-3">Optional — type or write with stylus</p>
+          <textarea
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cchp-blue resize-none"
+            rows={5}
+            placeholder="Add any additional notes, observations, or follow-up items..."
+            value={extraNotes}
+            onChange={(e) => {
+              const val = e.target.value;
+              setExtraNotes(val);
+              saveDraftAnswers(formId, { ...answers, _extra_notes: val });
+            }}
+          />
+        </div>
+
+        {/* Photos */}
+        <div className="card">
+          <h3 className="font-bold text-gray-900 mb-2">Photos</h3>
+          <p className="text-xs text-gray-400 mb-3">Optional — upload up to 5 photos</p>
+          {photos.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {photos.map((photo, idx) => (
+                <div key={idx} className="relative">
+                  <img
+                    src={photo.dataUrl}
+                    alt={`Photo ${idx + 1}`}
+                    className="w-full h-32 object-cover rounded-xl"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = photos.filter((_, i) => i !== idx);
+                      setPhotos(updated);
+                      savePhotoData(formId, updated);
+                    }}
+                    className="absolute top-1.5 right-1.5 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {photos.length < 5 && (
+            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-6 cursor-pointer hover:border-cchp-blue hover:bg-cchp-lightblue transition-colors">
+              <Camera size={24} className="text-gray-400" />
+              <span className="text-sm text-gray-500 font-medium">Tap to upload photos</span>
+              <span className="text-xs text-gray-400">JPEG or PNG · up to {5 - photos.length} more</span>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  const remaining = 5 - photos.length;
+                  const toProcess = files.slice(0, remaining);
+                  const compressed = await Promise.all(toProcess.map((f) => compressImage(f)));
+                  const updated = [...photos, ...compressed];
+                  setPhotos(updated);
+                  savePhotoData(formId, updated);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          )}
+        </div>
       </main>
 
       {/* Bottom actions */}
