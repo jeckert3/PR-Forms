@@ -12,6 +12,7 @@ const TEAL = [0, 174, 203];
 const LGRAY = [245, 245, 245];
 const MGRAY = [180, 180, 180];
 const DGRAY = [80, 80, 80];
+const SHOW_UPLOADED_DOCUMENT_HEADERS = false;
 
 function drawSectionHeader(doc, text, y) {
   doc.setFillColor(...BLUE);
@@ -581,19 +582,21 @@ export function generateSiteEvalPDF(answers, photos = []) {
 
 export function generateCustomFormPDF(form, answers, photos = []) {
   const doc = new jsPDF('p', 'pt', 'letter');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(0, 0, 0);
-  doc.text(form.name.toUpperCase(), PW / 2, 30, { align: 'center' });
-  if (form.description) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...DGRAY);
-    doc.text(form.description, PW / 2, 42, { align: 'center' });
+  let y = 40;
+  if (SHOW_UPLOADED_DOCUMENT_HEADERS) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
     doc.setTextColor(0, 0, 0);
+    doc.text(form.name.toUpperCase(), PW / 2, 30, { align: 'center' });
+    if (form.description) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...DGRAY);
+      doc.text(form.description, PW / 2, 42, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    }
+    y = 55;
   }
-
-  let y = 55;
 
   for (const section of (form.sections || [])) {
     y = checkPageBreak(doc, y, 30);
